@@ -39,7 +39,8 @@ namespace Redis.PruebasDeConcepto
 
             // ******************EJEMPLO PARA ORDENES DE EVALUACION************************
             string OrdenId = Guid.NewGuid().ToString().ToLower();
-            const int CANTIDAD_IMAGENES = 10000;
+            OrdenId = "f0cfdff6-194e-4351-8025-42697dc5f2ad";
+            const int CANTIDAD_IMAGENES = 168;
             //Pub/Sub
             IRedisCacheConnectionPoolManager _redisCacheConnectionPoolManager = serviceProvider.GetService<IRedisCacheConnectionPoolManager>();
             var connection = _redisCacheConnectionPoolManager.GetConnection();
@@ -53,7 +54,7 @@ namespace Redis.PruebasDeConcepto
                     Console.WriteLine($"{DateTime.Now.ToString("yyyyMMdd HH:mm:ss")}<Normal - {channel}><{message}>.");
 
                     //Print cuando termine
-                    var procesados = GetStringBetween((string)message,"[", "]");
+                    var procesados = GetStringBetween((string)message,"[", "]").Split(',')[2];
                     if (Convert.ToInt32(procesados) == CANTIDAD_IMAGENES)
                     {
                         Console.WriteLine($"{DateTime.Now.ToString("yyyyMMdd HH:mm:ss")}<Normal - {channel}><Se proceso todos las imagenes>.");
@@ -93,9 +94,10 @@ namespace Redis.PruebasDeConcepto
             // get a publish client, or you can use connection.GetDatabase(), which won't open a new client.
             // GetSubscriber() will open a dedicated client which can only be used for Pub/Sub.
             var publisher = connection.GetSubscriber();
+            _redisClient.Db0.Database.KeyDelete(key);
             for (int i = 1; i <= cantidadImagenes; i++)
             {
-                //Thread.Sleep(10);
+                Thread.Sleep(50);
                 //Redundante se podria sacar al sumar RegistrosValidos y RegistrosObservados
                 long valorActual = _redisClient.Db0.Database.HashIncrement(key,
                                          RegistrosProcesados,
@@ -117,7 +119,9 @@ namespace Redis.PruebasDeConcepto
                 //// publish message to one channel
                 //publisher.Publish(channelName, $"Publish a message to literal channel: {channelName}");
                 // publish message to one channel
-                publisher.Publish($"status:ord:{ordenId}", $"Message: Valor Actual :[{valorActual}]");
+                
+                var idEntidad = "1";
+                publisher.Publish($"status:ord:{ordenId}", $"[{idEntidad},{valorActual}]");
 
             }
         }
