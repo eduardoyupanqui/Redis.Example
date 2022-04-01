@@ -4,13 +4,16 @@ using Redis.PruebasDeConcepto.Extensions;
 using StackExchange.Redis;
 using StackExchange.Redis.Extensions.Core.Abstractions;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Redis.PruebasDeConcepto
 {
     class Program
     {
-        static void Main(string[] args)
+        static async void Main(string[] args)
         {
             //var builder = new ConfigurationBuilder()
             //    .SetBasePath(Directory.GetCurrentDirectory())
@@ -64,7 +67,10 @@ namespace Redis.PruebasDeConcepto
             );
 
             PruebaStatusOrdenEvaluacion(OrdenId, CANTIDAD_IMAGENES, _redisCacheConnectionPoolManager, _redisClient);
-
+            
+            var ordenId = Guid.NewGuid().ToString();
+            PruebaCounters(ordenId,_redisClient);
+            var X = await GetCountersOfRedis(ordenId, _redisClient);
             Console.ReadKey();
         }
 
@@ -125,6 +131,66 @@ namespace Redis.PruebasDeConcepto
 
             }
         }
+
+        static void PruebaCounters(string ordenId, IRedisCacheClient _redisClient)
+        {
+            //  ord:d7687efb-feb4-4a4a-a51e-b110434571a6:status
+            //          TotalRegistros          :   100
+            //          RegistrosProcesados     :   40
+            //          RegistrosValidos        :   38
+            //          RegistrosObservados     :    2
+
+            var key = $"ord:{ordenId}:status";
+
+            const string TotalRegistros = "tr";
+            const string RegistrosProcesados = "rp";
+            const string RegistrosValidos = "rv";
+            const string RegistrosObservados = "ro";
+
+
+
+            //Crea por primera vez el hash
+            _redisClient.Db0.Database.HashSet(key, TotalRegistros, 100, When.NotExists);
+
+
+
+            //Para incrementar uno de los campos  sin respuesta osea void
+            _redisClient.Db0.Database.HashIncrement(key, RegistrosProcesados, 1, CommandFlags.FireAndForget);
+            _redisClient.Db0.Database.HashIncrement(key, RegistrosValidos, 1, CommandFlags.FireAndForget);
+            _redisClient.Db0.Database.HashIncrement(key, RegistrosObservados, 1, CommandFlags.FireAndForget);
+
+            //Si incrementas y quieres que retorne el valor incrementado
+            long valorActual = _redisClient.Db0.Database.HashIncrement(key,
+                                                     RegistrosProcesados,
+                                                     1, CommandFlags.None); 
+        }
+        //Para obtener los valores de un hash
+        public static async Task<(int, int, int, int)> GetCountersOfRedis(string ordenId, IRedisCacheClient _redisClient)
+        {
+            var key = $"ord:{ordenId}:status";
+
+            const string TotalRegistros = "tr";
+            const string RegistrosProcesados = "rp";
+            const string RegistrosValidos = "rv";
+            const string RegistrosObservados = "ro";
+
+            HashEntry[] hashValues = await _redisClient.GetDbFromConfiguration().Database.HashGetAllAsync(key);
+            Dictionary<string, string> hashValuesDic = hashValues.ToDictionary(
+                x => x.Name.ToString(),
+                x => x.Value.ToString(),
+                StringComparer.Ordinal);
+
+            string cantidadRegistrosProcesados = hashValuesDic.ContainsKey(RegistrosProcesados) ? hashValuesDic[RegistrosProcesados] : "0";
+            string cantidadRegistrosValidos = hashValuesDic.ContainsKey(RegistrosValidos) ? hashValuesDic[RegistrosValidos] : "0";
+            string cantidadRegistrosObservados = hashValuesDic.ContainsKey(RegistrosObservados) ? hashValuesDic[RegistrosObservados] : "0";
+            string cantidadTotalRegistros = hashValuesDic.ContainsKey(TotalRegistros) ? hashValuesDic[TotalRegistros] : "0";
+
+            return (Convert.ToInt32(cantidadRegistrosProcesados),
+                Convert.ToInt32(cantidadRegistrosValidos),
+                Convert.ToInt32(cantidadRegistrosObservados),
+                Convert.ToInt32(cantidadTotalRegistros));
+        }
+
         private static string GetStringBetween(string message, string v1, string v2)
         {
             if (string.IsNullOrEmpty(message))
