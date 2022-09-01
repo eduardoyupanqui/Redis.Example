@@ -21,7 +21,6 @@ namespace Redis.PruebasDeConcepto.Extensions
             services.AddSingleton(redisConfiguration);
             services.AddSingleton<IRedisCacheClient, RedisCacheClient>();
             services.AddSingleton<IRedisCacheConnectionPoolManager, RedisCacheConnectionPoolManager>();
-            services.AddSingleton<IRedisDefaultCacheClient, RedisDefaultCacheClient>();
             services.AddSingleton<ISerializer, Utf8JsonSerializer>();
             return services;
 

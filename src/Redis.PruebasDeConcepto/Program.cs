@@ -13,7 +13,7 @@ namespace Redis.PruebasDeConcepto
 {
     class Program
     {
-        static async void Main(string[] args)
+        static async Task Main(string[] args)
         {
             //var builder = new ConfigurationBuilder()
             //    .SetBasePath(Directory.GetCurrentDirectory())
