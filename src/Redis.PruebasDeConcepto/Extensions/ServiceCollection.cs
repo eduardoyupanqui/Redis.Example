@@ -19,8 +19,14 @@ namespace Redis.PruebasDeConcepto.Extensions
 
             var redisConfiguration = configuration.GetSection("Redis").Get<RedisConfiguration>();
             services.AddSingleton(redisConfiguration);
-            services.AddSingleton<IRedisCacheClient, RedisCacheClient>();
-            services.AddSingleton<IRedisCacheConnectionPoolManager, RedisCacheConnectionPoolManager>();
+            services.AddSingleton<IRedisClientFactory, RedisClientFactory>();
+            services.AddSingleton<IRedisClient>((provider) => provider
+              .GetRequiredService<IRedisClientFactory>()
+              .GetDefaultRedisClient());
+            services.AddSingleton<IRedisDatabase>((provider) => provider
+              .GetRequiredService<IRedisClientFactory>()
+              .GetDefaultRedisClient()
+              .GetDefaultDatabase());
             services.AddSingleton<ISerializer, Utf8JsonSerializer>();
             return services;
 

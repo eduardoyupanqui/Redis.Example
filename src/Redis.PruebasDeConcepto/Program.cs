@@ -30,15 +30,15 @@ namespace Redis.PruebasDeConcepto
 
             var serviceProvider = services.BuildServiceProvider();
 
-            IRedisCacheClient _redisClient = serviceProvider.GetService<IRedisCacheClient>();
+            IRedisClient _redisClient = serviceProvider.GetService<IRedisClient>();
 
             //Examplo
             var key = $"example:Eduardo:summary";
-            _redisClient.Db0.Database.HashSet(key, "Valor:A", 1, When.NotExists);
-            _redisClient.Db0.Database.HashSet(key, "Valor:B", 1, When.NotExists);
-            _redisClient.Db0.Database.HashSet(key, "Valor:C", 1, When.NotExists);
-            _redisClient.Db0.Database.HashSet(key, "Valor:A", 100, When.Always, CommandFlags.FireAndForget);
-            _redisClient.Db0.Database.HashSet(key, "Valor:A", 200);
+            _redisClient.GetDefaultDatabase().Database.HashSet(key, "Valor:A", 1, When.NotExists);
+            _redisClient.GetDefaultDatabase().Database.HashSet(key, "Valor:B", 1, When.NotExists);
+            _redisClient.GetDefaultDatabase().Database.HashSet(key, "Valor:C", 1, When.NotExists);
+            _redisClient.GetDefaultDatabase().Database.HashSet(key, "Valor:A", 100, When.Always, CommandFlags.FireAndForget);
+            _redisClient.GetDefaultDatabase().Database.HashSet(key, "Valor:A", 200);
 
 
             // ******************EJEMPLO PARA ORDENES DE EVALUACION************************
@@ -46,8 +46,8 @@ namespace Redis.PruebasDeConcepto
             OrdenId = "f0cfdff6-194e-4351-8025-42697dc5f2ad";
             const int CANTIDAD_IMAGENES = 168;
             //Pub/Sub
-            IRedisCacheConnectionPoolManager _redisCacheConnectionPoolManager = serviceProvider.GetService<IRedisCacheConnectionPoolManager>();
-            var connection = _redisCacheConnectionPoolManager.GetConnection();
+            IRedisConnectionPoolManager _redisConnectionPoolManager = _redisClient.ConnectionPoolManager;
+            var connection = _redisConnectionPoolManager.GetConnection();
             IDatabase db = connection.GetDatabase();
             ISubscriber subscriber = connection.GetSubscriber();
             subscriber.Subscribe("status:*", (channel, message) =>
@@ -58,7 +58,7 @@ namespace Redis.PruebasDeConcepto
                     Console.WriteLine($"{DateTime.Now.ToString("yyyyMMdd HH:mm:ss")}<Normal - {channel}><{message}>.");
 
                     //Print cuando termine
-                    var procesados = GetStringBetween((string)message,"[", "]").Split(',')[2];
+                    var procesados = GetStringBetween((string)message,"[", "]").Split(',')[1];
                     if (Convert.ToInt32(procesados) == CANTIDAD_IMAGENES)
                     {
                         Console.WriteLine($"{DateTime.Now.ToString("yyyyMMdd HH:mm:ss")}<Normal - {channel}><Se proceso todos las imagenes>.");
@@ -67,7 +67,7 @@ namespace Redis.PruebasDeConcepto
             }
             );
 
-            PruebaStatusOrdenEvaluacion(OrdenId, CANTIDAD_IMAGENES, _redisCacheConnectionPoolManager, _redisClient);
+            PruebaStatusOrdenEvaluacion(OrdenId, CANTIDAD_IMAGENES, _redisConnectionPoolManager, _redisClient);
             
             var ordenId = Guid.NewGuid().ToString();
             PruebaCounters(ordenId,_redisClient);
@@ -75,7 +75,7 @@ namespace Redis.PruebasDeConcepto
             Console.ReadKey();
         }
 
-        static void PruebaStatusOrdenEvaluacion(string ordenId, int cantidadImagenes, IRedisCacheConnectionPoolManager _redisCacheConnectionPoolManager, IRedisCacheClient _redisClient)
+        static void PruebaStatusOrdenEvaluacion(string ordenId, int cantidadImagenes, IRedisConnectionPoolManager _redisCacheConnectionPoolManager, IRedisClient _redisClient)
         {
             const string TotalRegistros = "tr";
             const string RegistrosProcesados = "rp";
@@ -91,7 +91,7 @@ namespace Redis.PruebasDeConcepto
             
             var key = $"ord:{ordenId}:status";
 
-            _redisClient.Db0.Database.HashSet(key,
+            _redisClient.GetDefaultDatabase().Database.HashSet(key,
                                      TotalRegistros,
                                      cantidadImagenes,
                                      When.NotExists);
@@ -101,24 +101,24 @@ namespace Redis.PruebasDeConcepto
             // get a publish client, or you can use connection.GetDatabase(), which won't open a new client.
             // GetSubscriber() will open a dedicated client which can only be used for Pub/Sub.
             var publisher = connection.GetSubscriber();
-            _redisClient.Db0.Database.KeyDelete(key);
+            _redisClient.GetDefaultDatabase().Database.KeyDelete(key);
             for (int i = 1; i <= cantidadImagenes; i++)
             {
                 Thread.Sleep(50);
                 //Redundante se podria sacar al sumar RegistrosValidos y RegistrosObservados
-                long valorActual = _redisClient.Db0.Database.HashIncrement(key,
+                long valorActual = _redisClient.GetDefaultDatabase().Database.HashIncrement(key,
                                          RegistrosProcesados,
                                          1, CommandFlags.None);
 
                 if (i % 10 == 0)
                 {
                     //Marcar como errores los multiplos de 10
-                    _redisClient.Db0.Database.HashIncrement(key,
+                    _redisClient.GetDefaultDatabase().Database.HashIncrement(key,
                                       RegistrosObservados, 1, CommandFlags.FireAndForget);
                 }
                 else
                 {
-                    _redisClient.Db0.Database.HashIncrement(key,
+                    _redisClient.GetDefaultDatabase().Database.HashIncrement(key,
                                       RegistrosValidos, 1, CommandFlags.FireAndForget);
                 }
 
@@ -133,7 +133,7 @@ namespace Redis.PruebasDeConcepto
             }
         }
 
-        static void PruebaCounters(string ordenId, IRedisCacheClient _redisClient)
+        static void PruebaCounters(string ordenId, IRedisClient _redisClient)
         {
             //  ord:d7687efb-feb4-4a4a-a51e-b110434571a6:status
             //          TotalRegistros          :   100
@@ -151,22 +151,22 @@ namespace Redis.PruebasDeConcepto
 
 
             //Crea por primera vez el hash
-            _redisClient.Db0.Database.HashSet(key, TotalRegistros, 100, When.NotExists);
+            _redisClient.GetDefaultDatabase().Database.HashSet(key, TotalRegistros, 100, When.NotExists);
 
 
 
             //Para incrementar uno de los campos  sin respuesta osea void
-            _redisClient.Db0.Database.HashIncrement(key, RegistrosProcesados, 1, CommandFlags.FireAndForget);
-            _redisClient.Db0.Database.HashIncrement(key, RegistrosValidos, 1, CommandFlags.FireAndForget);
-            _redisClient.Db0.Database.HashIncrement(key, RegistrosObservados, 1, CommandFlags.FireAndForget);
+            _redisClient.GetDefaultDatabase().Database.HashIncrement(key, RegistrosProcesados, 1, CommandFlags.FireAndForget);
+            _redisClient.GetDefaultDatabase().Database.HashIncrement(key, RegistrosValidos, 1, CommandFlags.FireAndForget);
+            _redisClient.GetDefaultDatabase().Database.HashIncrement(key, RegistrosObservados, 1, CommandFlags.FireAndForget);
 
             //Si incrementas y quieres que retorne el valor incrementado
-            long valorActual = _redisClient.Db0.Database.HashIncrement(key,
+            long valorActual = _redisClient.GetDefaultDatabase().Database.HashIncrement(key,
                                                      RegistrosProcesados,
                                                      1, CommandFlags.None); 
         }
         //Para obtener los valores de un hash
-        public static async Task<(int, int, int, int)> GetCountersOfRedis(string ordenId, IRedisCacheClient _redisClient)
+        public static async Task<(int, int, int, int)> GetCountersOfRedis(string ordenId, IRedisClient _redisClient)
         {
             var key = $"ord:{ordenId}:status";
 
@@ -175,7 +175,7 @@ namespace Redis.PruebasDeConcepto
             const string RegistrosValidos = "rv";
             const string RegistrosObservados = "ro";
 
-            HashEntry[] hashValues = await _redisClient.GetDbFromConfiguration().Database.HashGetAllAsync(key);
+            HashEntry[] hashValues = await _redisClient.GetDefaultDatabase().Database.HashGetAllAsync(key);
             Dictionary<string, string> hashValuesDic = hashValues.ToDictionary(
                 x => x.Name.ToString(),
                 x => x.Value.ToString(),
