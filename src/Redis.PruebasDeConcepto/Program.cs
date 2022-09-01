@@ -25,6 +25,7 @@ namespace Redis.PruebasDeConcepto
 
 
             IServiceCollection services = new ServiceCollection();
+            services.AddLogging();
             services.AddRedis(config);
 
             var serviceProvider = services.BuildServiceProvider();
